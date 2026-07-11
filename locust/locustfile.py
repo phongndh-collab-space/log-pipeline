@@ -15,8 +15,8 @@ except Exception as e:
 
 class SystemUser(HttpUser):
     host = "http://localhost:7002"
-    # Thời gian nghỉ ngẫu nhiên giữa các request (từ 1 đến 5 giây)
-    wait_time = between(1, 5)
+    # Thời gian nghỉ ngẫu nhiên giữa các request (từ 0.1 đến 0.5 giây để tăng tần suất gọi)
+    wait_time = between(0.1, 0.5)
 
     def on_start(self):
         """
@@ -38,10 +38,14 @@ class SystemUser(HttpUser):
 
         with self.client.post("/api/auth/login", json=login_payload, catch_response=True) as response:
             if response.status_code in [200, 201]:
-                data = response.json()
-                self.token = data.get("accessToken") or data.get("token")
-                self.headers = {"Authorization": f"Bearer {self.token}"}
-                response.success()
+                resp_json = response.json()
+                auth_data = resp_json.get("data") if isinstance(resp_json.get("data"), dict) else resp_json
+                self.token = auth_data.get("accessToken") or auth_data.get("token") or resp_json.get("accessToken")
+                if self.token:
+                    self.headers = {"Authorization": f"Bearer {self.token}"}
+                    response.success()
+                else:
+                    response.failure(f"Login response did not contain a token: {response.text}")
             else:
                 response.failure(f"Login failed for user {self.username}: {response.text}")
 
@@ -137,12 +141,24 @@ class SystemUser(HttpUser):
         Task giả lập hành động lỗi để sinh Error Logs (mã lỗi 4xx) giúp ClickHouse & Postgres có dữ liệu lỗi.
         """
         # 1. Gọi vào API cần Token nhưng KHÔNG truyền Token (Lỗi 401 Unauthorized)
-        self.client.get("/api/categories")
+        with self.client.get("/api/categories", catch_response=True) as response:
+            if response.status_code == 401:
+                response.success()
+            else:
+                response.failure(f"Expected 401 Unauthorized, but got: {response.status_code}")
         
         # 2. Xóa Category với ID không tồn tại (Lỗi 400 hoặc 404)
         if self.token:
-            self.client.delete("/api/categories/99999", headers=self.headers)
+            with self.client.delete("/api/categories/99999", headers=self.headers, catch_response=True) as response:
+                if response.status_code in [400, 404]:
+                    response.success()
+                else:
+                    response.failure(f"Expected 400/404, but got: {response.status_code}")
         
         # 3. Gửi dữ liệu tạo ví sai định dạng (Lỗi 400 Bad Request)
         if self.token:
-            self.client.post("/api/wallets", json={"name": ""}, headers=self.headers)
+            with self.client.post("/api/wallets", json={"name": ""}, headers=self.headers, catch_response=True) as response:
+                if response.status_code == 400:
+                    response.success()
+                else:
+                    response.failure(f"Expected 400 Bad Request, but got: {response.status_code}")

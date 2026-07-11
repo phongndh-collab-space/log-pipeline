@@ -2,16 +2,18 @@ import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const limit = searchParams.get('limit') || '50';
+  const limit = searchParams.get('limit') || '100';
   const page = searchParams.get('page') || '1';
   const search = searchParams.get('search') || '';
   const status = searchParams.get('status') || '';
   const source = searchParams.get('source') || '';
+  const startTime = searchParams.get('start_time') || '';
+  const endTime = searchParams.get('end_time') || '';
 
   try {
     // Forward the request to the Go backend service
     const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:7003';
-    const response = await fetch(`${backendUrl}/api/logs?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}&source=${encodeURIComponent(source)}`, {
+    const response = await fetch(`${backendUrl}/api/logs?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}&source=${encodeURIComponent(source)}&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`, {
       cache: 'no-store', // Always fetch fresh logs
     });
 

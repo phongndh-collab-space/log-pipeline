@@ -13,11 +13,14 @@ interface LogState {
   search: string;
   status: string;
   source: 'clickhouse' | 'postgres';
-  fetchLogs: (page?: number, limit?: number, search?: string, status?: string, source?: 'clickhouse' | 'postgres') => Promise<void>;
+  startTime: string;
+  endTime: string;
+  fetchLogs: (page?: number, limit?: number, search?: string, status?: string, source?: 'clickhouse' | 'postgres', startTime?: string, endTime?: string) => Promise<void>;
   setPage: (page: number) => void;
   setLimit: (limit: number) => void;
   setFilters: (search: string, status: string) => void;
   setSource: (source: 'clickhouse' | 'postgres') => void;
+  setTimeRange: (startTime: string, endTime: string) => void;
   analyticsData: import('@/types/analytics').AnalyticsData | null;
   analyticsLoading: boolean;
   analyticsStartTime: string;
@@ -31,26 +34,30 @@ export const useLogStore = create<LogState>((set, get) => ({
   loading: false,
   error: null,
   page: 1,
-  limit: 20,
+  limit: 100,
   total: 0,
   totalPages: 0,
   search: '',
   status: 'all',
   source: 'clickhouse',
+  startTime: new Date(Date.now() - 60000).toISOString(),
+  endTime: new Date().toISOString(),
   analyticsData: null,
   analyticsLoading: false,
   analyticsStartTime: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
   analyticsEndTime: new Date().toISOString(),
-  fetchLogs: async (page, limit, search, status, source) => {
+  fetchLogs: async (page, limit, search, status, source, startTime, endTime) => {
     const activePage = page !== undefined ? page : get().page;
     const activeLimit = limit !== undefined ? limit : get().limit;
     const activeSearch = search !== undefined ? search : get().search;
     const activeStatus = status !== undefined ? status : get().status;
     const activeSource = source !== undefined ? source : get().source;
+    const activeStartTime = startTime !== undefined ? startTime : get().startTime;
+    const activeEndTime = endTime !== undefined ? endTime : get().endTime;
 
     set({ loading: true, error: null });
     try {
-      const response = await LogService.getRecentLogs(activePage, activeLimit, activeSearch, activeStatus, activeSource);
+      const response = await LogService.getRecentLogs(activePage, activeLimit, activeSearch, activeStatus, activeSource, activeStartTime, activeEndTime);
       if (response.success) {
         set({
           logs: Array.isArray(response.data) ? response.data : [],
@@ -61,6 +68,8 @@ export const useLogStore = create<LogState>((set, get) => ({
           search: activeSearch,
           status: activeStatus,
           source: activeSource,
+          startTime: activeStartTime,
+          endTime: activeEndTime,
           loading: false,
         });
       } else {
@@ -101,19 +110,23 @@ export const useLogStore = create<LogState>((set, get) => ({
   },
   setPage: (page) => {
     set({ page });
-    get().fetchLogs(page, get().limit, get().search, get().status, get().source);
+    get().fetchLogs(page, get().limit, get().search, get().status, get().source, get().startTime, get().endTime);
   },
   setLimit: (limit) => {
     set({ limit, page: 1 });
-    get().fetchLogs(1, limit, get().search, get().status, get().source);
+    get().fetchLogs(1, limit, get().search, get().status, get().source, get().startTime, get().endTime);
   },
   setFilters: (search, status) => {
     set({ search, status, page: 1 });
-    get().fetchLogs(1, get().limit, search, status, get().source);
+    get().fetchLogs(1, get().limit, search, status, get().source, get().startTime, get().endTime);
   },
   setSource: (source) => {
     set({ source, page: 1 });
-    get().fetchLogs(1, get().limit, get().search, get().status, source);
+    get().fetchLogs(1, get().limit, get().search, get().status, source, get().startTime, get().endTime);
     get().fetchAnalytics();
+  },
+  setTimeRange: (startTime, endTime) => {
+    set({ startTime, endTime, page: 1 });
+    get().fetchLogs(1, get().limit, get().search, get().status, get().source, startTime, endTime);
   }
 }));

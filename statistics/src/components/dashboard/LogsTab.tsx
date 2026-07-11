@@ -5,8 +5,15 @@ import { useLogStore } from "@/stores/useLogStore"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
-const pageSizeOptions = [10, 20, 50, 100]
+const pageSizeOptions = [50, 100, 200, 500]
 
 const methodClasses: Record<string, string> = {
   GET: "border-blue-200 bg-blue-50 text-blue-700",
@@ -42,21 +49,59 @@ export function LogsTab() {
     search,
     status,
     source,
+    startTime,
+    endTime,
     fetchLogs,
     setPage,
     setLimit,
     setFilters,
-    setSource
+    setSource,
+    setTimeRange
   } = useLogStore()
 
   const [localSearch, setLocalSearch] = useState(search)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [, startTransition] = useTransition()
 
+  const formatForInput = (isoString: string) => {
+    if (!isoString) return ""
+    const date = new Date(isoString)
+    if (Number.isNaN(date.getTime())) return ""
+    
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const year = date.getFullYear()
+    const month = pad(date.getMonth() + 1)
+    const day = pad(date.getDate())
+    const hours = pad(date.getHours())
+    const minutesVal = pad(date.getMinutes())
+    
+    return `${year}-${month}-${day}T${hours}:${minutesVal}`
+  }
+
+  const [localStart, setLocalStart] = useState(formatForInput(startTime))
+  const [localEnd, setLocalEnd] = useState(formatForInput(endTime))
+
+  useEffect(() => {
+    setLocalStart(formatForInput(startTime))
+    setLocalEnd(formatForInput(endTime))
+  }, [startTime, endTime])
+
+  const handleApplyTimeFilter = () => {
+    const startIso = localStart ? new Date(localStart).toISOString() : ""
+    const endIso = localEnd ? new Date(localEnd).toISOString() : ""
+    setTimeRange(startIso, endIso)
+  }
+
+  const handleAllTime = () => {
+    setLocalStart("")
+    setLocalEnd("")
+    setTimeRange("", "")
+  }
+
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      await fetchLogs(page, limit, search, status)
+      await fetchLogs(page, limit, search, status, source, startTime, endTime)
     } finally {
       setIsRefreshing(false)
     }
@@ -64,7 +109,7 @@ export function LogsTab() {
 
   // Initial load - run only once on mount
   useEffect(() => {
-    fetchLogs(1, limit, search, status)
+    fetchLogs(1, limit, search, status, source, startTime, endTime)
   }, [fetchLogs]) // Only fetchLogs as dependency to run once
 
   // Debounced search updates - run only when localSearch changes and is different from current store search
@@ -168,6 +213,45 @@ export function LogsTab() {
           </button>
         </div>
 
+        {/* Time Filter */}
+        <div className="flex flex-wrap items-center gap-2 border-l border-border pl-4">
+          <span className="text-xs text-muted-foreground whitespace-nowrap">Time Range:</span>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="datetime-local"
+              value={localStart}
+              onChange={(e) => setLocalStart(e.target.value)}
+              className="rounded-full border border-border bg-surface-soft px-3 py-1 text-xs font-semibold text-ink focus:outline-none focus:ring-2 focus:ring-primary h-8 transition-all cursor-pointer"
+              title="Start Time"
+            />
+            <span className="text-xs text-muted-foreground">—</span>
+            <input
+              type="datetime-local"
+              value={localEnd}
+              onChange={(e) => setLocalEnd(e.target.value)}
+              className="rounded-full border border-border bg-surface-soft px-3 py-1 text-xs font-semibold text-ink focus:outline-none focus:ring-2 focus:ring-primary h-8 transition-all cursor-pointer"
+              title="End Time"
+            />
+          </div>
+          <Button
+            type="button"
+            onClick={handleApplyTimeFilter}
+            size="sm"
+            className="h-8 rounded-full px-4 text-xs font-semibold"
+          >
+            Apply
+          </Button>
+          <Button
+            type="button"
+            onClick={handleAllTime}
+            variant="outline"
+            size="sm"
+            className="h-8 rounded-full px-3 text-xs font-semibold"
+          >
+            All Time
+          </Button>
+        </div>
+
         {/* Source Toggle */}
         <div className="flex items-center gap-2 border-l border-border pl-4">
           <button type="button" onClick={() => setSource("clickhouse")}>
@@ -251,17 +335,18 @@ export function LogsTab() {
           {/* Rows Per Page Selector */}
           <div className="flex items-center gap-2">
             <span>Show</span>
-            <select
-              value={limit}
-              onChange={(event) => setLimit(Number(event.target.value))}
-              className="rounded-full border border-border bg-surface-soft px-3 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all cursor-pointer"
-            >
-              {pageSizeOptions.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
+            <Select value={String(limit)} onValueChange={(val) => setLimit(Number(val))}>
+              <SelectTrigger className="w-[85px] rounded-full border border-border bg-surface-soft px-3 py-1.5 text-sm text-ink h-8 focus:outline-none focus:ring-2 focus:ring-primary transition-all cursor-pointer">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {pageSizeOptions.map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <span>logs per page</span>
           </div>
 

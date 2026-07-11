@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"time"
 
 	"github.com/template/go-backend-gin-orm/model"
 	"github.com/template/go-backend-gin-orm/repositories"
@@ -15,9 +16,9 @@ func NewLogService(repo *repositories.LogRepository) *LogService {
 	return &LogService{repo: repo}
 }
 
-func (s *LogService) GetRecentLogs(ctx context.Context, page int, limit int, search string, status string) ([]model.Log, int64, error) {
+func (s *LogService) GetRecentLogs(ctx context.Context, page int, limit int, search string, status string, startTime time.Time, endTime time.Time) ([]model.Log, int64, error) {
 	if limit <= 0 {
-		limit = 50 // default limit
+		limit = 100 // default limit
 	} else if limit > 1000 {
 		limit = 1000 // max limit
 	}
@@ -27,12 +28,12 @@ func (s *LogService) GetRecentLogs(ctx context.Context, page int, limit int, sea
 	}
 
 	offset := (page - 1) * limit
-	return s.repo.GetLogs(ctx, limit, offset, search, status)
+	return s.repo.GetLogs(ctx, limit, offset, search, status, startTime, endTime)
 }
 
-func (s *LogService) GetBackupLogs(ctx context.Context, page int, limit int, search string, status string) ([]model.BackupLog, int64, error) {
+func (s *LogService) GetBackupLogs(ctx context.Context, page int, limit int, search string, status string, startTime time.Time, endTime time.Time) ([]model.BackupLog, int64, error) {
 	if limit <= 0 {
-		limit = 50 // default limit
+		limit = 100 // default limit
 	} else if limit > 1000 {
 		limit = 1000 // max limit
 	}
@@ -42,7 +43,7 @@ func (s *LogService) GetBackupLogs(ctx context.Context, page int, limit int, sea
 	}
 
 	offset := (page - 1) * limit
-	return s.repo.GetBackupLogs(ctx, limit, offset, search, status)
+	return s.repo.GetBackupLogs(ctx, limit, offset, search, status, startTime, endTime)
 }
 
 func (s *LogService) GetAnalytics(ctx context.Context, filter repositories.AnalyticsFilter) (*model.AnalyticsResponse, error) {

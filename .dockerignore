@@ -1,0 +1,8 @@
+**/node_modules
+**/.next
+**/dist
+**/app
+**/*.log
+.git
+.idea
+.vscode

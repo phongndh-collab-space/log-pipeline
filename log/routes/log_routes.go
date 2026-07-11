@@ -14,10 +14,10 @@ func LogRoutes(router *gin.RouterGroup, logService *services.LogService) {
 	logGroup := router.Group("/logs")
 	{
 		logGroup.GET("", func(c *gin.Context) {
-			limitStr := c.DefaultQuery("limit", "50")
+			limitStr := c.DefaultQuery("limit", "100")
 			limit, err := strconv.Atoi(limitStr)
 			if err != nil {
-				limit = 50
+				limit = 100
 			}
 
 			pageStr := c.DefaultQuery("page", "1")
@@ -30,11 +30,26 @@ func LogRoutes(router *gin.RouterGroup, logService *services.LogService) {
 			status := c.Query("status")
 			source := c.Query("source")
 
+			startStr := c.Query("start_time")
+			endStr := c.Query("end_time")
+
+			var startTime, endTime time.Time
+			if startStr != "" {
+				if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+					startTime = t
+				}
+			}
+			if endStr != "" {
+				if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+					endTime = t
+				}
+			}
+
 			var data interface{}
 			var total int64
 
 			if source == "postgres" {
-				logs, totalCount, err := logService.GetBackupLogs(c.Request.Context(), page, limit, search, status)
+				logs, totalCount, err := logService.GetBackupLogs(c.Request.Context(), page, limit, search, status, startTime, endTime)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch backup logs: " + err.Error()})
 					return
@@ -42,7 +57,7 @@ func LogRoutes(router *gin.RouterGroup, logService *services.LogService) {
 				data = logs
 				total = totalCount
 			} else {
-				logs, totalCount, err := logService.GetRecentLogs(c.Request.Context(), page, limit, search, status)
+				logs, totalCount, err := logService.GetRecentLogs(c.Request.Context(), page, limit, search, status, startTime, endTime)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch logs: " + err.Error()})
 					return

@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -18,7 +19,7 @@ func NewLogRepository(conn driver.Conn, gormDB *gorm.DB) *LogRepository {
 	return &LogRepository{conn: conn, gormDB: gormDB}
 }
 
-func (r *LogRepository) GetLogs(ctx context.Context, limit int, offset int, search string, status string) ([]model.Log, int64, error) {
+func (r *LogRepository) GetLogs(ctx context.Context, limit int, offset int, search string, status string, startTime time.Time, endTime time.Time) ([]model.Log, int64, error) {
 	var total uint64
 	var whereClauses []string
 	var queryParams []any
@@ -33,6 +34,16 @@ func (r *LogRepository) GetLogs(ctx context.Context, limit int, offset int, sear
 		whereClauses = append(whereClauses, "is_error = 1")
 	} else if status == "success" {
 		whereClauses = append(whereClauses, "is_error = 0")
+	}
+
+	if !startTime.IsZero() {
+		whereClauses = append(whereClauses, "event_time >= ?")
+		queryParams = append(queryParams, startTime)
+	}
+
+	if !endTime.IsZero() {
+		whereClauses = append(whereClauses, "event_time <= ?")
+		queryParams = append(queryParams, endTime)
 	}
 
 	whereSql := ""
@@ -64,7 +75,7 @@ func (r *LogRepository) GetLogs(ctx context.Context, limit int, offset int, sear
 	return logs, int64(total), nil
 }
 
-func (r *LogRepository) GetBackupLogs(ctx context.Context, limit int, offset int, search string, status string) ([]model.BackupLog, int64, error) {
+func (r *LogRepository) GetBackupLogs(ctx context.Context, limit int, offset int, search string, status string, startTime time.Time, endTime time.Time) ([]model.BackupLog, int64, error) {
 	var total int64
 	var logs []model.BackupLog
 
@@ -80,6 +91,14 @@ func (r *LogRepository) GetBackupLogs(ctx context.Context, limit int, offset int
 		query = query.Where(`"isError" = ?`, 1)
 	} else if status == "success" {
 		query = query.Where(`"isError" = ?`, 0)
+	}
+
+	if !startTime.IsZero() {
+		query = query.Where(`"eventTime" >= ?`, startTime)
+	}
+
+	if !endTime.IsZero() {
+		query = query.Where(`"eventTime" <= ?`, endTime)
 	}
 
 	err := query.Count(&total).Error
