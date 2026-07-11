@@ -23,9 +23,15 @@ WORKDIR /app
 # Copy compiled binary from builder stage
 COPY --from=builder /app/main .
 
+# Copy database migrations directory
+COPY database ./database
+
+# Copy env file
+COPY --from=builder /app/.env .env
+
 # Copy static files from the uploads folder
 COPY uploads ./uploads
 
-EXPOSE 8080
+EXPOSE 7003
 
 CMD ["./main"]

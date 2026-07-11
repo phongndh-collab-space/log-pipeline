@@ -28,11 +28,16 @@ func (s *KafkaMonitorService) GetMonitorStats() ([]TopicStats, error) {
 		broker = "localhost:9092"
 	}
 	
-	dialer := &kafka.Dialer{
-		SASLMechanism: plain.Mechanism{
-			Username: s.env.KafkaUsername,
-			Password: s.env.KafkaPassword,
-		},
+	var dialer *kafka.Dialer
+	if s.env.KafkaUsername != "" {
+		dialer = &kafka.Dialer{
+			SASLMechanism: plain.Mechanism{
+				Username: s.env.KafkaUsername,
+				Password: s.env.KafkaPassword,
+			},
+		}
+	} else {
+		dialer = &kafka.Dialer{}
 	}
 
 	brokers := strings.Split(broker, ",")

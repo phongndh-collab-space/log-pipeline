@@ -33,11 +33,14 @@ func NewConsumer(env *config.Env, db LogInserter, producer *Producer) *Consumer 
 		brokers = []string{"localhost:9092"}
 	}
 
-	dialer := &kafka.Dialer{
-		SASLMechanism: plain.Mechanism{
-			Username: env.KafkaUsername,
-			Password: env.KafkaPassword,
-		},
+	var dialer *kafka.Dialer
+	if env.KafkaUsername != "" {
+		dialer = &kafka.Dialer{
+			SASLMechanism: plain.Mechanism{
+				Username: env.KafkaUsername,
+				Password: env.KafkaPassword,
+			},
+		}
 	}
 
 	mainReader := kafka.NewReader(kafka.ReaderConfig{
@@ -99,7 +102,10 @@ func (c *Consumer) StartMainConsumer(ctx context.Context) {
 			m, err := c.mainReader.FetchMessage(ctxTimeout)
 			cancel()
 			if err != nil {
-				// timeout or other error
+				if err != context.DeadlineExceeded && err != context.Canceled {
+					log.Printf("⚠️ Error fetching message from Kafka main topic: %v", err)
+					time.Sleep(1 * time.Second)
+				}
 				continue
 			}
 			batch = append(batch, m)
@@ -248,6 +254,10 @@ func (c *Consumer) StartRetryConsumer(ctx context.Context) {
 	for {
 		m, err := c.retryReader.FetchMessage(ctx)
 		if err != nil {
+			if err != context.Canceled {
+				log.Printf("⚠️ Error fetching message from Kafka retry topic: %v", err)
+				time.Sleep(1 * time.Second)
+			}
 			continue
 		}
 

@@ -33,8 +33,8 @@ export class KafkaTestController implements OnModuleInit, OnModuleDestroy {
   }
 
   // Consumer: Listen to 'raw-logs' topic
-  @EventPattern('raw-logs')
-  handleRawLogs(@Payload() data: any) {
-    console.log('📬 Received event from Kafka topic raw-logs:', data);
-  }
+  // @EventPattern('raw-logs')
+  // handleRawLogs(@Payload() data: any) {
+  //   console.log('📬 Received event from Kafka topic raw-logs:', data);
+  // }
 }

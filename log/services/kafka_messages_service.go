@@ -34,13 +34,16 @@ type RetryTopicStats struct {
 }
 
 func (s *KafkaMonitorService) newDialer() *kafka.Dialer {
-	return &kafka.Dialer{
+	dialer := &kafka.Dialer{
 		Timeout: 10 * time.Second,
-		SASLMechanism: plain.Mechanism{
+	}
+	if s.env.KafkaUsername != "" {
+		dialer.SASLMechanism = plain.Mechanism{
 			Username: s.env.KafkaUsername,
 			Password: s.env.KafkaPassword,
-		},
+		}
 	}
+	return dialer
 }
 
 func (s *KafkaMonitorService) getBroker() string {

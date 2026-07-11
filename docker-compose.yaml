@@ -1,0 +1,234 @@
+name: log-tracing-system
+
+services:
+  # 1. PostgreSQL Database
+  postgres:
+    image: postgres:18-alpine
+    container_name: postgres
+    restart: unless-stopped
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Sql000
+      POSTGRES_DB: log_tracing
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d log_tracing"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - log-tracing-network
+
+  # 2. Kafka Message Broker
+  kafka:
+    image: confluentinc/cp-kafka:8.2.2
+    container_name: kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+    environment:
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_LISTENERS: "PLAINTEXT://kafka:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://kafka:29093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,EXTERNAL:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_SASL_ENABLED_MECHANISMS: "PLAIN"
+      KAFKA_LISTENER_NAME_EXTERNAL_PLAIN_SASL_JAAS_CONFIG: "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"admin\" password=\"admin-secret\" user_admin=\"admin-secret\";"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:29093"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka:29092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - log-tracing-network
+
+  # 3. Kafka Topics Initializer
+  kafka-init:
+    image: confluentinc/cp-kafka:8.2.2
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c", "kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic raw-logs --partitions 3 --replication-factor 1 && kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic raw-logs-retry --partitions 3 --replication-factor 1 && kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic raw-logs-dlq --partitions 1 --replication-factor 1 && kafka-topics --bootstrap-server kafka:29092 --list"]
+    restart: "no"
+    networks:
+      - log-tracing-network
+
+  # 4. Redpanda Console (Kafka UI)
+  redpanda-console:
+    image: redpandadata/console:v3.5.0
+    container_name: redpanda-console
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BROKERS: "kafka:29092"
+    networks:
+      - log-tracing-network
+
+  # 5. ClickHouse Database
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.4.4.38
+    container_name: clickhouse
+    restart: unless-stopped
+    ports:
+      - "8123:8123"   # HTTP API
+      - "9002:9000"   # Native TCP client (external)
+      - "9363:9363"   # Prometheus metrics
+    environment:
+      CLICKHOUSE_DB: log_db
+      CLICKHOUSE_USER: admin
+      CLICKHOUSE_PASSWORD: admin123
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+      - ./infra/docker/clickhouse/config.d/prometheus.xml:/etc/clickhouse-server/config.d/prometheus.xml:ro
+      - ./infra/docker/clickhouse/init:/docker-entrypoint-initdb.d:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user", "admin", "--password", "admin123", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - log-tracing-network
+
+  # 6. ClickHouse UI (Web client)
+  ch-ui:
+    image: ghcr.io/caioricciuti/ch-ui:latest
+    container_name: ch-ui
+    restart: unless-stopped
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "3488:3488"
+    environment:
+      CLICKHOUSE_URL: "http://clickhouse:8123"
+      CONNECTION_NAME: "Local ClickHouse"
+      APP_SECRET_KEY: "fsdfsdfsdfsdfdsfsdfds"
+    volumes:
+      - ch_ui_data:/app/data
+    networks:
+      - log-tracing-network
+
+  # 7. NestJS Application Server
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: nestjs-server
+    restart: unless-stopped
+    command: sh -c "npx prisma db push && node dist/main.js"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "7002:7002"
+    environment:
+      PORT: 7002
+      DATABASE_URL: "postgresql://postgres:Sql000@postgres:5432/log_tracing?schema=public"
+      KAFKA_BROKERS: "kafka:29092"
+      KAFKA_USERNAME: ""
+      KAFKA_PASSWORD: ""
+      JWT_SECRET: "Utenimadminimveniam,*(idfkrejdbfjf)9dfisdaj@34irgjrnkl*"
+      THROTTLE_TTL: 10000
+      THROTTLE_LIMIT: 10000
+      COOKIE_SECRET: "dfsoisfhjksedbhjdkf23453*(*(Hjbhf"
+    networks:
+      - log-tracing-network
+
+  # 8. Go Log Service
+  log-service:
+    build:
+      context: ./log
+      dockerfile: Dockerfile
+    container_name: go-log-service
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "7003:7003"
+    environment:
+      PORT: 7003
+      KAFKA_BROKERS: "kafka:29092"
+      KAFKA_USERNAME: ""
+      KAFKA_PASSWORD: ""
+      CLICKHOUSE_URL: "clickhouse://admin:admin123@clickhouse:9000/log_db"
+      CLICKHOUSE_DEV_URL: "clickhouse://admin:admin123@clickhouse:9000/default"
+      POSTGRES_URL: "postgresql://postgres:Sql000@postgres:5432/log_tracing?sslmode=disable"
+      JWT_SECRET: "fhgdsauIOJHFJKSFHGDJKSFFHGDBJN"
+      JWT_EXPIRE: 48
+      BATCH_SIZE: 500
+      FLUSH_INTERVAL: 1
+    networks:
+      - log-tracing-network
+
+  # 9. Next.js Client App (Personal Budget Tracker)
+  client-app:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: client-app
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "7001:7001"
+    environment:
+      PORT: 7001
+      SERVER_API_URL: "http://server:7002/api"
+    networks:
+      - log-tracing-network
+
+  # 10. Next.js Log Stats Dashboard (Log Monitoring Dashboard)
+  stats-dashboard:
+    build:
+      context: ./statistics
+      dockerfile: Dockerfile
+    container_name: stats-dashboard
+    restart: unless-stopped
+    depends_on:
+      - log-service
+    ports:
+      - "7004:7004"
+    environment:
+      PORT: 7004
+      BACKEND_API_URL: "http://log-service:7003"
+    networks:
+      - log-tracing-network
+
+networks:
+  log-tracing-network:
+    name: log-tracing-network
+    driver: bridge
+
+volumes:
+  postgres_data:
+  clickhouse_data:
+  clickhouse_logs:
+  ch_ui_data:

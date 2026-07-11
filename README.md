@@ -63,73 +63,82 @@ Trước khi khởi chạy hệ thống, hãy đảm bảo máy tính của bạ
 
 ---
 
-## 🚀 Hướng Dẫn Khởi Chạy Từng Bước
+## 🚀 Hướng Dẫn Khởi Chạy Hệ Thống
 
-### Bước 1: Khởi động các hạ tầng (Docker Compose)
-Mở một terminal tại thư mục gốc của dự án, di chuyển vào thư mục `docker-compose` và khởi chạy các container (PostgreSQL, Kafka, ClickHouse, Redpanda Console, ClickHouse UI):
+Bạn có thể chạy dự án này bằng **2 cách** khác nhau tùy vào mục đích:
+
+---
+
+### 🎯 CÁCH 1: Chạy thuần Docker (Thử nghiệm độc lập - Khá tốn thời gian build)
+*Cách này hữu ích khi bạn muốn chạy thử nghiệm nhanh toàn bộ hệ thống khép kín mà không muốn cài đặt Node.js hay Go trên máy thật. Tuy nhiên, thời gian build các ứng dụng Node/Go trong Docker khá lâu.*
+
+1. **Khởi chạy toàn bộ ở chế độ chạy ngầm (Detached mode)**:
+   Mở terminal tại thư mục gốc của dự án và chạy:
+   ```bash
+   docker compose up -d --build
+   ```
+   *Lưu ý: Tham số `-d` (detached mode) giúp chạy ngầm các container dưới nền, giải phóng cửa sổ terminal để bạn làm việc khác.*
+
+2. **Nạp dữ liệu mẫu (Chỉ cần chạy duy nhất lần đầu tiên)**:
+   Hệ thống đã tự động chạy khởi tạo bảng dữ liệu (`npx prisma db push` cho Postgres và migration cho ClickHouse) lúc khởi động container. Bạn chỉ cần chạy lệnh sau để nạp 100 tài khoản người dùng mẫu phục vụ cho việc giả lập Locust:
+   ```bash
+   docker exec -it nestjs-server node dist/database/vietnamese-user-seeding.js
+   ```
+
+---
+
+### 🛠️ CÁCH 2: Chỉ chạy Docker hạ tầng (Infra) rồi chạy Code cục bộ (Local) - 🌟 KHUYÊN DÙNG
+*Phương pháp này được **khuyến khích nhất** vì giúp khởi chạy ứng dụng gần như tức thì, tiết kiệm thời gian build nặng và hỗ trợ tự động tải lại (hot-reload) khi bạn sửa code ở local.*
+
+#### Bước 1: Khởi chạy cụm hạ tầng ở chế độ chạy ngầm (Detached mode)
+Di chuyển vào thư mục [infra] và khởi chạy các database container (Postgres, Kafka, ClickHouse):
 ```bash
-cd docker-compose
+cd infra
 docker compose -f docker-compose.postgres.yml -f docker-compose.kafka.yml -f docker-compose.clickhouse.yml up -d
 ```
-*Hãy đợi khoảng 10-15 giây để tất cả container khởi động và đạt trạng thái Healthy.*
 
----
+#### Bước 2: Khởi chạy các ứng dụng cục bộ dưới dạng Dev Mode
+Mở **4 cửa sổ Terminal riêng biệt** cho 4 ứng dụng dưới đây (mỗi ứng dụng chạy trên một terminal riêng để dễ dàng theo dõi log và sửa code trực tiếp):
 
-### Bước 2: Khởi tạo dữ liệu và chạy NestJS App Server (Port 7002)
-Mở một terminal mới tại thư mục gốc dự án và thực hiện các lệnh sau:
-```bash
-# 1. Di chuyển vào thư mục server
-cd server
+1. **NestJS App Server (Terminal 1 - Cổng 7002)**:
+   Di chuyển vào thư mục [server](file:///c:/Users/phong/OneDrive/Desktop/Code/log-tracing/server), cài đặt dependencies và khởi chạy ở chế độ Hot-reload:
+   ```bash
+   cd server
+   yarn install
+   npx prisma db push
+   yarn seed:user
+   yarn start:dev
+   ```
+   *Lưu ý: Tệp `server/.env` đã được cấu hình sẵn để kết nối tới Postgres qua cổng `localhost:5435` và Kafka qua cổng `localhost:9092`.*
 
-# 2. Cài đặt các gói thư viện
-yarn install
+2. **Go Log Service (Terminal 2 - Cổng 7003)**:
+   Di chuyển vào thư mục [log](file:///c:/Users/phong/OneDrive/Desktop/Code/log-tracing/log), tải thư viện và chạy:
+   ```bash
+   cd log
+   go mod tidy
+   go run cmd/main.go
+   ```
+   *Lưu ý: Bạn cũng có thể dùng `nodemon` để tự động khởi động lại Go service khi sửa file: 
+   ```bash
+    nodemon --watch './**/*.go' --signal SIGTERM --exec 'go' run cmd/main.go 
+    ```
+3. **Web Client App (Terminal 3 - Ví Chi Tiêu - Cổng 7001)**:
+   Di chuyển vào thư mục [client](file:///c:/Users/phong/OneDrive/Desktop/Code/log-tracing/client) và khởi chạy Next.js Dev Server:
+   ```bash
+   cd client
+   yarn install
+   yarn dev
+   ```
 
-# 3. Tạo schema database trên Postgres
-npx prisma db push
+4. **Stats Dashboard (Terminal 4 - Giám sát Logs - Cổng 7004)**:
+   Di chuyển vào thư mục [statistics](file:///c:/Users/phong/OneDrive/Desktop/Code/log-tracing/statistics) và khởi chạy Next.js Dev Server:
+   ```bash
+   cd statistics
+   yarn install
+   yarn dev
+   ```
 
-# 4. Chạy seed tạo danh sách người dùng mẫu
-yarn seed:user
 
-# 5. Khởi chạy server ở chế độ dev
-yarn start:dev
-```
-*Lưu ý: Lệnh `npx prisma db push` sẽ tự động tạo các bảng dữ liệu cần thiết (như User, Wallet, Category, Transaction, BackupLog) trên PostgreSQL container và `yarn seed:user` sẽ tạo 100 tài khoản người dùng mẫu phục vụ cho việc giả lập Locust.*
-
----
-
-### Bước 3: Khởi chạy Go Log Service (Port 7003)
-Mở một terminal mới tại thư mục gốc dự án và chạy:
-```bash
-# 1. Di chuyển vào thư mục log
-cd log
-
-# 2. Tải các gói thư viện phụ thuộc của Go
-go mod tidy
-
-# 3. Chạy dịch vụ xử lý log
-go run cmd/main.go
-```
-*Service sẽ tự động kết nối tới Kafka để consume log và ClickHouse để lưu trữ.*
-
----
-
-### Bước 4: Khởi chạy Giao diện Người dùng và Dashboard Giám sát
-
-- **Chạy Web Client (Quản lý ví & giao dịch - Port 7001)**:
-  Mở terminal mới và chạy:
-  ```bash
-  cd client
-  yarn install
-  yarn dev
-  ```
-
-- **Chạy Stats Dashboard (Giám sát Logs & Kafka - Port 7004)**:
-  Mở terminal mới và chạy:
-  ```bash
-  cd statistics
-  yarn install
-  yarn dev
-  ```
 
 ---
 

@@ -23,11 +23,14 @@ func NewProducer(env *config.Env) *Producer {
 		brokers = []string{"localhost:9092"}
 	}
 
-	dialer := &kafka.Dialer{
-		SASLMechanism: plain.Mechanism{
-			Username: env.KafkaUsername,
-			Password: env.KafkaPassword,
-		},
+	var dialer *kafka.Dialer
+	if env.KafkaUsername != "" {
+		dialer = &kafka.Dialer{
+			SASLMechanism: plain.Mechanism{
+				Username: env.KafkaUsername,
+				Password: env.KafkaPassword,
+			},
+		}
 	}
 
 	dlqWriter := kafka.NewWriter(kafka.WriterConfig{
