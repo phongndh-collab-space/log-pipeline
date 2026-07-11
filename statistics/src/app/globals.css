@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+:root {
+  --radius: 14px;
+}
+
+@theme inline {
+  --color-primary: #ff385c;
+  --color-primary-active: #e00b41;
+  --color-primary-disabled: #ffd1da;
+  --color-primary-error-text: #c13515;
+  --color-primary-error-text-hover: #b32505;
+  --color-luxe: #460479;
+  --color-plus: #92174d;
+  --color-ink: #222222;
+  --color-body: #3f3f3f;
+  --color-muted: #6a6a6a;
+  --color-muted-soft: #929292;
+  --color-hairline: #dddddd;
+  --color-hairline-soft: #ebebeb;
+  --color-border-strong: #c1c1c1;
+  --color-canvas: #ffffff;
+  --color-surface-soft: #f7f7f7;
+  --color-surface-card: #ffffff;
+  
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+  
+  /* Map shadcn UI required variables to Airbnb design */
+  --color-background: var(--color-canvas);
+  --color-foreground: var(--color-ink);
+  --color-border: var(--color-hairline);
+  --color-input: var(--color-hairline);
+  --color-ring: var(--color-primary);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--color-surface-soft);
+  --color-secondary-foreground: var(--color-ink);
+  --color-destructive: var(--color-primary-error-text);
+  --color-destructive-foreground: #ffffff;
+  --color-muted-foreground: var(--color-muted);
+  --color-accent: var(--color-surface-soft);
+  --color-accent-foreground: var(--color-ink);
+  --color-popover: var(--color-surface-card);
+  --color-popover-foreground: var(--color-ink);
+  --color-card: var(--color-surface-card);
+  --color-card-foreground: var(--color-ink);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+}

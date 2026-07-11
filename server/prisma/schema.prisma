@@ -1,0 +1,98 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+  output        = "./generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  type         String
+  account      String        @unique
+  username     String
+  passwordHash String?
+  avatar       String
+  role         Int
+  wallets      Wallet[]
+  categories   Category[]
+  transactions Transaction[]
+}
+
+model Wallet {
+  id                   Int           @id @default(autoincrement())
+  name                 String
+  balance              Float         @default(0)
+  currency             String        @default("VND")
+  userId               Int
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions         Transaction[] @relation("walletTransactions")
+  incomingTransactions Transaction[] @relation("toWalletTransactions")
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+}
+
+model Category {
+  id           Int           @id @default(autoincrement())
+  name         String
+  type         String // "INCOME" or "EXPENSE"
+  icon         String
+  color        String
+  userId       Int?
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Transaction {
+  id           Int       @id @default(autoincrement())
+  amount       Float
+  type         String // "INCOME", "EXPENSE", "TRANSFER"
+  description  String?
+  date         DateTime  @default(now())
+  walletId     Int
+  wallet       Wallet    @relation("walletTransactions", fields: [walletId], references: [id], onDelete: Cascade)
+  toWalletId   Int?
+  toWallet     Wallet?   @relation("toWalletTransactions", fields: [toWalletId], references: [id], onDelete: Cascade)
+  categoryId   Int?
+  category     Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  userId       Int
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+
+
+// npx prisma migrate dev --name init
+// npx prisma migrate reset
+// npx prisma migrate deploy
+
+model BackupLog {
+  id          Int      @id @default(autoincrement())
+  eventTime   DateTime @default(now())
+  ingestedAt  DateTime @default(now())
+  requestId   String
+  serviceName String
+  clientIp    String
+  method      String
+  path        String
+  statusCode  Int
+  statusGroup String?
+  latencyMs   Int
+  isError     Int      @default(0)
+  userAgent   String
+  rawMessage  String
+
+  createdAt   DateTime @default(now())
+}

@@ -1,0 +1,23 @@
+CREATE TABLE logs
+(
+    event_time DateTime,
+    ingested_at DateTime DEFAULT now(),
+
+    request_id String,
+    service_name LowCardinality(String),
+
+    client_ip String,
+    method LowCardinality(String),
+    path String,
+    status_code UInt16,
+    status_group LowCardinality(String),
+
+    latency_ms UInt32,
+    is_error UInt8,
+
+    user_agent String,
+    raw_message String
+)
+ENGINE = MergeTree
+PARTITION BY toDate(event_time)
+ORDER BY (event_time, service_name, path, status_code);
