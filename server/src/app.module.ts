@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { ProviderModule } from "@provider/provider.module";
 import { ModelModule } from "@model/model.module";
@@ -10,7 +10,7 @@ import { AuthenticationModule } from "@authentication/authentication.module";
 import { SanitizeHtmlInterceptor } from "@interceptor/sanitize-html.interceptor";
 import { ThrottlerGuard } from "@nestjs/throttler";
 
-import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
+import { LoggingMiddleware } from "./common/middlewares/logging.middleware";
 import { PrismaService } from "@prisma/prisma.service";
 
 @Module({
@@ -32,10 +32,6 @@ import { PrismaService } from "@prisma/prisma.service";
     },
     {
       provide: APP_INTERCEPTOR,
-      useClass: LoggingInterceptor
-    },
-    {
-      provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor
     },
     {
@@ -49,5 +45,8 @@ import { PrismaService } from "@prisma/prisma.service";
     PrismaService
   ]
 })
-export class AppModule {
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(LoggingMiddleware).forRoutes("*");
+  }
 }

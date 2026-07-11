@@ -89,11 +89,12 @@ class SystemUser(HttpUser):
         # 1. Gọi GET lấy danh sách ví
         with self.client.get("/api/wallets", headers=self.headers, catch_response=True) as response:
             if response.status_code == 200:
-                self.wallets = response.json()
+                resp_json = response.json()
+                self.wallets = resp_json.get("data") if isinstance(resp_json, dict) and "data" in resp_json else []
                 response.success()
             else:
                 response.failure(f"Failed to fetch wallets list: {response.text}")
-
+ 
         # 2. 30% cơ hội tạo ví mới
         if random.random() < 0.3:
             wallet_payload = {
@@ -104,8 +105,10 @@ class SystemUser(HttpUser):
             with self.client.post("/api/wallets", json=wallet_payload, headers=self.headers, catch_response=True) as response:
                 if response.status_code in [200, 201]:
                     # Cập nhật lại danh sách ví sau khi tạo mới thành công
-                    new_wallet = response.json()
-                    self.wallets.append(new_wallet)
+                    resp_json = response.json()
+                    new_wallet = resp_json.get("data") if isinstance(resp_json, dict) and "data" in resp_json else resp_json
+                    if isinstance(self.wallets, list):
+                        self.wallets.append(new_wallet)
                     response.success()
                 else:
                     response.failure(f"Failed to create wallet: {response.text}")
