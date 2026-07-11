@@ -1,47 +1,17 @@
 import random
-import unicodedata
+import json
+import os
 from locust import HttpUser, task, between
 
-def remove_diacritics(text):
-    text = unicodedata.normalize('NFKD', text)
-    text = ''.join([c for c in text if not unicodedata.combining(c)])
-    text = text.replace('đ', 'd').replace('Đ', 'D')
-    return text
-
-male_names = [
-    "Anh", "Bình", "Cường", "Dũng", "Hùng", "Huy", "Khánh", "Kiên", "Lâm", "Long",
-    "Minh", "Nam", "Nghĩa", "Ngọc", "Phát", "Phong", "Phúc", "Quang", "Quốc", "Sơn",
-    "Tài", "Tâm", "Tân", "Thắng", "Thành", "Thái", "Thiện", "Thọ", "Tiến", "Toàn",
-    "Trí", "Trung", "Trường", "Tuấn", "Văn", "Việt", "Vinh", "Vũ", "Xuân", "Hải",
-    "Hoàng", "Hiếu", "Hòa", "Khoa", "Lợi", "Mạnh", "Phú", "Tùng", "Duy", "Đạt"
-]
-
-female_names = [
-    "An", "Anh", "Ánh", "Bích", "Chi", "Diễm", "Diệu", "Dung", "Giang", "Hà",
-    "Hạnh", "Hiền", "Hoa", "Hồng", "Hương", "Khánh", "Kiều", "Lan", "Lệ", "Liên",
-    "Linh", "Loan", "Mai", "Mỹ", "Ngân", "Ngọc", "Nhàn", "Nhi", "Như", "Oanh",
-    "Phương", "Quỳnh", "Sương", "Thảo", "Thanh", "Thi", "Thu", "Thúy", "Trang", "Trinh",
-    "Tuyết", "Uyên", "Vân", "Vy", "Yến", "Ái", "Tiên", "Tường", "Hòa", "Đào"
-]
-
-all_names = male_names + female_names
-
-# Tạo ra danh sách account đăng nhập giống hệt logic bên NestJS seed
-usernames = []
-used_accounts = set()
-
-for name in all_names:
-    clean_name = remove_diacritics(name)
-    account = clean_name.lower().strip()
-    
-    if account in used_accounts:
-        counter = 2
-        while f"{account}{counter}" in used_accounts:
-            counter += 1
-        account = f"{account}{counter}"
-        
-    used_accounts.add(account)
-    usernames.append(account)
+# Đọc danh sách usernames trực tiếp từ tệp user.json gốc để đảm bảo khớp 100%
+user_json_path = os.path.join(os.path.dirname(__file__), "../user.json")
+try:
+    with open(user_json_path, "r", encoding="utf-8") as f:
+        users_data = json.load(f)
+    usernames = [u["username"] for u in users_data]
+except Exception as e:
+    # Fallback nếu gặp lỗi
+    usernames = ["anh", "binh", "cuong", "dung", "hung", "huy", "khanh", "kien", "lam", "long"]
 
 class SystemUser(HttpUser):
     host = "http://localhost:7002"
@@ -73,7 +43,7 @@ class SystemUser(HttpUser):
                 self.headers = {"Authorization": f"Bearer {self.token}"}
                 response.success()
             else:
-                response.failure(f"Đăng nhập thất bại cho user {self.username}: {response.text}")
+                response.failure(f"Login failed for user {self.username}: {response.text}")
 
     @task(3)
     def view_profile(self):
@@ -118,7 +88,7 @@ class SystemUser(HttpUser):
                 self.wallets = response.json()
                 response.success()
             else:
-                response.failure(f"Không thể lấy danh sách ví: {response.text}")
+                response.failure(f"Failed to fetch wallets list: {response.text}")
 
         # 2. 30% cơ hội tạo ví mới
         if random.random() < 0.3:
@@ -134,7 +104,7 @@ class SystemUser(HttpUser):
                     self.wallets.append(new_wallet)
                     response.success()
                 else:
-                    response.failure(f"Tạo ví thất bại: {response.text}")
+                    response.failure(f"Failed to create wallet: {response.text}")
 
     @task(2)
     def manage_transactions(self):
